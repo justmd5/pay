@@ -35,7 +35,7 @@ class WebGateway implements GatewayInterface
         $payload['biz_content'] = json_encode($biz_array);
         $payload['sign'] = Support::generateSign($payload);
 
-        Events::dispatch(Events::PAY_STARTED, new Events\PayStarted('Alipay', 'Web/Wap', $endpoint, $payload));
+        Events::dispatch(new Events\PayStarted('Alipay', 'Web/Wap', $endpoint, $payload));
 
         return $this->buildPayHtml($endpoint, $payload, $method);
     }
@@ -71,7 +71,7 @@ class WebGateway implements GatewayInterface
     protected function buildPayHtml($endpoint, $payload, $method = 'POST'): Response
     {
         if (strtoupper($method) === 'GET') {
-            return RedirectResponse::create($endpoint.'?'.http_build_query($payload));
+            return RedirectResponse::create($endpoint.'&'.http_build_query($payload));
         }
 
         $sHtml = "<form id='alipay_submit' name='alipay_submit' action='".$endpoint."' method='".$method."'>";

@@ -143,7 +143,7 @@ class Wechat implements GatewayApplicationInterface
      */
     public function pay($gateway, $params = [])
     {
-        Events::dispatch(Events::PAY_STARTING, new Events\PayStarting('Wechat', $gateway, $params));
+        Events::dispatch(new Events\PayStarting('Wechat', $gateway, $params));
 
         $this->payload = array_merge($this->payload, $params);
 
@@ -169,11 +169,11 @@ class Wechat implements GatewayApplicationInterface
      *
      * @return Collection
      */
-    public function verify($content = null, $refund = false): Collection
+    public function verify($content = null, bool $refund = false): Collection
     {
         $content = $content ?? Request::createFromGlobals()->getContent();
 
-        Events::dispatch(Events::REQUEST_RECEIVED, new Events\RequestReceived('Wechat', '', [$content]));
+        Events::dispatch(new Events\RequestReceived('Wechat', '', [$content]));
 
         $data = Support::fromXml($content);
         if ($refund) {
@@ -187,7 +187,7 @@ class Wechat implements GatewayApplicationInterface
             return new Collection($data);
         }
 
-        Events::dispatch(Events::SIGN_FAILED, new Events\SignFailed('Wechat', '', $data));
+        Events::dispatch(new Events\SignFailed('Wechat', '', $data));
 
         throw new InvalidSignException('Wechat Sign Verify FAILED', $data);
     }
@@ -198,7 +198,7 @@ class Wechat implements GatewayApplicationInterface
      * @author yansongda <me@yansongda.cn>
      *
      * @param string|array $order
-     * @param bool         $refund
+     * @param string       $type
      *
      * @throws GatewayException
      * @throws InvalidSignException
@@ -206,19 +206,28 @@ class Wechat implements GatewayApplicationInterface
      *
      * @return Collection
      */
-    public function find($order, $refund = false): Collection
+    public function find($order, string $type = 'wap'): Collection
     {
-        if ($refund) {
+        if ($type != 'wap') {
             unset($this->payload['spbill_create_ip']);
         }
 
-        $this->payload = Support::filterPayload($this->payload, $order);
+        $gateway = get_class($this).'\\'.Str::studly($type).'Gateway';
 
-        Events::dispatch(Events::METHOD_CALLED, new Events\MethodCalled('Wechat', 'Find', $this->gateway, $this->payload));
+        if (!class_exists($gateway) || !is_callable([new $gateway(), 'find'])) {
+            throw new GatewayException("{$gateway} Done Not Exist Or Done Not Has FIND Method");
+        }
+
+        $config = call_user_func([new $gateway(), 'find'], $order);
+
+        $this->payload = Support::filterPayload($this->payload, $config['order']);
+
+        Events::dispatch(new Events\MethodCalled('Wechat', 'Find', $this->gateway, $this->payload));
 
         return Support::requestApi(
-            $refund ? 'pay/refundquery' : 'pay/orderquery',
-            $this->payload
+            $config['endpoint'],
+            $this->payload,
+            $config['cert']
         );
     }
 
@@ -235,11 +244,11 @@ class Wechat implements GatewayApplicationInterface
      *
      * @return Collection
      */
-    public function refund($order): Collection
+    public function refund(array $order): Collection
     {
         $this->payload = Support::filterPayload($this->payload, $order, true);
 
-        Events::dispatch(Events::METHOD_CALLED, new Events\MethodCalled('Wechat', 'Refund', $this->gateway, $this->payload));
+        Events::dispatch(new Events\MethodCalled('Wechat', 'Refund', $this->gateway, $this->payload));
 
         return Support::requestApi(
             'secapi/pay/refund',
@@ -267,7 +276,7 @@ class Wechat implements GatewayApplicationInterface
 
         $this->payload = Support::filterPayload($this->payload, $order, true);
 
-        Events::dispatch(Events::METHOD_CALLED, new Events\MethodCalled('Wechat', 'Cancel', $this->gateway, $this->payload));
+        Events::dispatch(new Events\MethodCalled('Wechat', 'Cancel', $this->gateway, $this->payload));
 
         return Support::requestApi(
             'secapi/pay/reverse',
@@ -295,7 +304,7 @@ class Wechat implements GatewayApplicationInterface
 
         $this->payload = Support::filterPayload($this->payload, $order);
 
-        Events::dispatch(Events::METHOD_CALLED, new Events\MethodCalled('Wechat', 'Close', $this->gateway, $this->payload));
+        Events::dispatch(new Events\MethodCalled('Wechat', 'Close', $this->gateway, $this->payload));
 
         return Support::requestApi('pay/closeorder', $this->payload);
     }
@@ -311,7 +320,7 @@ class Wechat implements GatewayApplicationInterface
      */
     public function success(): Response
     {
-        Events::dispatch(Events::METHOD_CALLED, new Events\MethodCalled('Wechat', 'Success', $this->gateway));
+        Events::dispatch(new Events\MethodCalled('Wechat', 'Success', $this->gateway));
 
         return Response::create(
             Support::toXml(['return_code' => 'SUCCESS', 'return_msg' => 'OK']),
@@ -338,7 +347,7 @@ class Wechat implements GatewayApplicationInterface
 
         $this->payload = Support::filterPayload($this->payload, $params, true);
 
-        Events::dispatch(Events::METHOD_CALLED, new Events\MethodCalled('Wechat', 'Download', $this->gateway, $this->payload));
+        Events::dispatch(new Events\MethodCalled('Wechat', 'Download', $this->gateway, $this->payload));
 
         $result = Support::getInstance()->post(
             'pay/downloadbill',

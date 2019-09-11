@@ -46,13 +46,31 @@ class TransferGateway extends Gateway
 
         $payload['sign'] = Support::generateSign($payload);
 
-        Events::dispatch(Events::PAY_STARTED, new Events\PayStarted('Wechat', 'Transfer', $endpoint, $payload));
+        Events::dispatch(new Events\PayStarted('Wechat', 'Transfer', $endpoint, $payload));
 
         return Support::requestApi(
             'mmpaymkttransfers/promotion/transfers',
             $payload,
             true
         );
+    }
+
+    /**
+     * Find.
+     *
+     * @author yansongda <me@yansongda.cn>
+     *
+     * @param $order
+     *
+     * @return array
+     */
+    public function find($order): array
+    {
+        return [
+            'endpoint' => 'mmpaymkttransfers/gettransferinfo',
+            'order'    => is_array($order) ? $order : ['partner_trade_no' => $order],
+            'cert'     => true,
+        ];
     }
 
     /**
